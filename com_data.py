@@ -25,13 +25,18 @@ class ComData(object):
         self.buff_x = np.empty((0), np.int)
         self.buff_y = np.empty((0, self.size), np.int16)
 
+        self.ser = None
+
+    def open(self, port, baud):
         self.data_parser = DataParser()
-        self.ser = ComThread("/dev/ttyUSB2", 230400, 0.5)
+        self.ser = ComThread(port, baud, 0.5)
         if self.ser.is_open:
             self.ser.start_read(self.datas_handle)
             print(f"Start reading.")
+            return True
         else:
             print(f"start failed.")
+            return False
 
     def datas_handle(self, raw_bytes):
         data_lists = []
@@ -41,10 +46,9 @@ class ComData(object):
                 data_lists.append(data_pack)
         if data_lists:
             data_all = np.array(data_lists)
-
-            idx_end = self.idx + data_all.shape[0]
             try:
                 self.lock.acquire()
+                idx_end = self.idx + data_all.shape[0]
                 self.buff_y = np.concatenate((self.buff_y, data_all), axis=0)
                 self.buff_x = np.concatenate((self.buff_x, np.arange(self.idx, idx_end)), axis=0)
                 self.idx = idx_end
@@ -72,35 +76,20 @@ class ComData(object):
         return buff_x, buff_y
 
     def close(self):
-        self.ser.stop_read()
+        if self.ser:
+            self.ser.stop_read()
+            self.ser = None
 
-    # def acquire_data(self):
-    #     try:
-    #         self.lock.acquire()
-    #
-    #         self.buff_y.append(self._get_data(msg))
-    #         self.buff_x.append(rospy.get_time() - self.start_time)
-    #     finally:
-    #         self.lock.release()
-
-    # def next(self):
-    #     """
-    #     Get the next data in the series
-    #
-    #     :returns: [xdata], [ydata]
-    #     """
-    #     if self.error:
-    #         raise self.error
-    #     try:
-    #         self.lock.acquire()
-    #         buff_x = self.buff_x
-    #         buff_y = self.buff_y
-    #         self.buff_x = []
-    #         self.buff_y = []
-    #     finally:
-    #         self.lock.release()
-    #     return buff_x, buff_y
-
+    def reset_idx(self):
+        try:
+            self.lock.acquire()
+            self.idx = 0
+            self.buff_x = np.empty((0), np.int)
+            self.buff_y = np.empty((0, self.size), np.int16)
+        except:
+            pass
+        finally:
+            self.lock.release()
 
 if __name__ == "__main__":
 

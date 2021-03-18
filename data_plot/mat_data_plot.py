@@ -157,6 +157,7 @@ class MatDataPlot(QWidget):
             marker_size = 0
         line = self._canvas.axes.plot([], [], 'o-', markersize=marker_size, label=curve_name,
                                       linewidth=1, picker=5, color=curve_color.name())[0]
+
         self._curves[curve_id] = line
         self._update_legend()
         self.set_xlim(x_limits)
@@ -179,6 +180,12 @@ class MatDataPlot(QWidget):
     def set_values(self, curve, data_x, data_y):
         line = self._curves[curve]
         line.set_data(data_x, data_y)
+
+    def set_visible(self, curve, visible):
+        self._curves[curve].set_visible(visible)
+
+    def visible(self, curve_id):
+        return self._curves[curve_id].get_visible()
 
     def redraw(self):
         self._canvas.axes.grid(True, color='gray')

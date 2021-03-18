@@ -16,14 +16,15 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__(*args, **kwargs)
 
         self._widget = plot_widget.PlotWidget()
-        self._data_plot = DataPlot(self._widget)
-
-        # disable autoscaling of X, and set a sane default range
-        self._data_plot.set_autoscale(x=False)
-        self._data_plot.set_autoscale(y=DataPlot.SCALE_EXTEND | DataPlot.SCALE_VISIBLE)
-        self._data_plot.set_xlim([0, 10.0])
-
-        self._widget.switch_data_plot_widget(self._data_plot)
+        # self._data_plot = DataPlot(self._widget)
+        #
+        # # disable autoscaling of X, and set a sane default range
+        # self._data_plot.set_autoscale(x=False)
+        # self._data_plot.set_autoscale(y=DataPlot.SCALE_EXTEND | DataPlot.SCALE_VISIBLE)
+        # # self._data_plot.set_autoscale(DataPlot.SCALE_VISIBLE)
+        # self._data_plot.set_xlim([0, 10.0])
+        #
+        # self._widget.switch_data_plot_widget(self._data_plot)
 
         self.setCentralWidget(self._widget)
         # self.graphWidget = pg.PlotWidget()

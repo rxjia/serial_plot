@@ -164,10 +164,12 @@ class ComThread():
         self.thread_read.start()
 
     def stop_read(self):
-        self.alive = False
-        self.thread_handle.join()
-        self.thread_read.join()
-        self.close()
+        if self.alive:
+            self.alive = False
+            self.thread_handle.join()
+            self.thread_read.join()
+        if self.ser.is_open:
+            self.close()
 
 
 def datas_handle(datas):

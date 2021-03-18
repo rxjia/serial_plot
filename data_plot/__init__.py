@@ -357,6 +357,12 @@ class DataPlot(QWidget):
         if self._data_plot_widget:
             self._data_plot_widget.remove_curve(curve_id)
 
+    def visible(self, curve_id):
+        return self._data_plot_widget.visible(curve_id)
+
+    def set_visible(self, curve_id, visible):
+        self._data_plot_widget.set_visible(curve_id, visible)
+
     def update_values(self, curve_id, values_x, values_y, sort_data=True):
         """Append new data to an existing curve
 
@@ -516,6 +522,45 @@ class DataPlot(QWidget):
                 # ymax += .05 * delta
         else:
             y_limit = self.get_ylim()
+
+        # set sane limits if our limits are infinite
+        if numpy.isinf(y_limit[0]):
+            y_limit[0] = 0.0
+        if numpy.isinf(y_limit[1]):
+            y_limit[1] = 1.0
+
+        self.set_xlim(x_limit)
+        self.set_ylim(y_limit)
+
+    def mannual_autoscale_y(self):
+        x_limit = self.get_xlim()
+
+        if numpy.isinf(x_limit[0]):
+            x_limit[0] = 0.0
+        if numpy.isinf(x_limit[1]):
+            x_limit[1] = 1.0
+
+        y_limit = [numpy.inf, -numpy.inf]
+
+        for curve_id in self._curves:
+            curve = self._curves[curve_id]
+            start_index = 0
+            end_index = len(curve['x'])
+
+            # if we're scaling based on the visible window, find the
+            # start and end indicies of our window
+            if self._autoscale_y & DataPlot.SCALE_VISIBLE:
+                # indexof x_limit[0] in curves['x']
+                start_index = curve['x'].searchsorted(x_limit[0])
+                # indexof x_limit[1] in curves['x']
+                end_index = curve['x'].searchsorted(x_limit[1])
+
+            # region here is cheap because it is a numpy view and not a
+            # copy of the underlying data
+            region = curve['y'][start_index:end_index]
+            if len(region) > 0:
+                y_limit[0] = min(y_limit[0], region.min())
+                y_limit[1] = max(y_limit[1], region.max())
 
         # set sane limits if our limits are infinite
         if numpy.isinf(y_limit[0]):

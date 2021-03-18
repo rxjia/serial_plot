@@ -70,6 +70,7 @@ class PyQtGraphDataPlot(QWidget):
     def __init__(self, parent=None):
         super(PyQtGraphDataPlot, self).__init__(parent)
         self._plot_widget = PlotWidget()
+        self._plot_widget.getPlotItem().showGrid(True, True, 0.5)
         self._plot_widget.getPlotItem().addLegend()
         self._plot_widget.setBackground((255, 255, 255))
         self._plot_widget.setXRange(0, 10, padding=0)
@@ -116,6 +117,12 @@ class PyQtGraphDataPlot(QWidget):
     def set_values(self, curve_id, data_x, data_y):
         curve = self._curves[curve_id]
         curve.setData(data_x, data_y)
+
+    def set_visible(self, curve_id, visible):
+        self._curves[curve_id].setVisible(visible)
+
+    def visible(self, curve_id):
+        return self._curves[curve_id].isVisible()
 
     def vline(self, x, color):
         if self._current_vline:

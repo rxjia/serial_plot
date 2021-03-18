@@ -29,20 +29,27 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
-
+import copy
+import logging
 import os
 import time
+
+# from python_qt_binding.QtCore import Qt
 
 # from python_qt_binding import loadUi
 # from python_qt_binding.QtCore import Qt, QTimer, qWarning, Slot
 # from python_qt_binding.QtGui import QIcon
 # from python_qt_binding.QtWidgets import QAction, QMenu, QWidget
-from PyQt5.QtCore import QTimer, pyqtSlot
-from PyQt5.QtGui import QIcon, QBrush
-from PyQt5.QtWidgets import QWidget, QMenu
+from datetime import datetime
+
+import numpy as np
+from PyQt5.QtCore import QTimer, pyqtSlot, Qt
+from PyQt5.QtGui import QIcon, QBrush, QColor
+from PyQt5.QtWidgets import QWidget, QMenu, QListWidgetItem
 from PyQt5.uic import loadUi
 
 from com_data import ComData
+from data_plot import DataPlot
 
 
 class PlotWidget(QWidget):
@@ -56,13 +63,17 @@ class PlotWidget(QWidget):
 
         ui_file = os.path.join('.', 'resource', 'plot.ui')
         loadUi(ui_file, self)
-        self.subscribe_topic_button.setIcon(QIcon.fromTheme('list-add'))
-        self.remove_topic_button.setIcon(QIcon.fromTheme('list-remove'))
+
+        # self.subscribe_topic_button.setIcon(QIcon.fromTheme('list-add'))
+        # self.remove_topic_button.setIcon(QIcon.fromTheme('list-remove'))
+
         self.pause_button.setIcon(QIcon.fromTheme('media-playback-pause'))
         self.clear_button.setIcon(QIcon.fromTheme('edit-clear'))
+        self.btn_setting.setIcon(QIcon.fromTheme('configure'))
         self.data_plot = None
+        self.filter_plot = None
 
-        self.subscribe_topic_button.setEnabled(False)
+        # self.subscribe_topic_button.setEnabled(False)
         if start_paused:
             self.pause_button.setChecked(True)
 
@@ -72,12 +83,27 @@ class PlotWidget(QWidget):
 
         self._remove_topic_menu = QMenu()
 
+        self.yMinSpinBox.setValue(0)
+        self.yMaxSpinBox.setValue(1000)
+
         for i in range(8):
             self._plotdata[f"CH{i}"] = i
+
+        self.csvFile = None
 
         # init and start update timer for plot
         self._update_plot_timer = QTimer(self)
         self._update_plot_timer.timeout.connect(self.update_plot)
+
+        # Data Plot ---------------------------
+        _data_plot = DataPlot(self)
+
+        # disable autoscaling of X, and set a sane default range
+        _data_plot.set_autoscale(x=False)
+        _data_plot.set_autoscale(y=DataPlot.SCALE_EXTEND | DataPlot.SCALE_VISIBLE)
+        _data_plot.set_xlim([0, 10.0])
+
+        self.switch_data_plot_widget(_data_plot)
 
     def switch_data_plot_widget(self, data_plot):
         self.enable_timer(enabled=False)
@@ -87,16 +113,16 @@ class PlotWidget(QWidget):
             self.data_plot.close()
 
         self.data_plot = data_plot
-        self.plotLayout.addWidget(self.data_plot)
         self.data_plot.autoscroll(self.autoscroll_checkbox.isChecked())
 
-        data_x, data_y_all = self._comdata.next()
-        while data_x.shape[0] == 0:
-            time.sleep(0.1)
-            data_x, data_y_all = self._comdata.next()
-
+        # data_x, data_y_all = self._comdata.next()
+        # while data_x.shape[0] == 0:
+        #     time.sleep(0.1)
+        #     data_x, data_y_all = self._comdata.next()
+        data_x = np.empty(0, np.int)
+        data_y = np.empty(0, np.int16)
         for topic_name, data_idx in self._plotdata.items():
-            data_y = data_y_all[:, data_idx]
+            # data_y = data_y_all[:, data_idx]
             self.data_plot.add_curve(topic_name, topic_name, data_x, data_y)
 
             self.listWidgetChannels.addItem(topic_name)
@@ -105,57 +131,56 @@ class PlotWidget(QWidget):
         self.enable_timer(self._plotdata)
         self.data_plot.redraw()
 
-        # # setup drag 'n drop
-        # self.data_plot.dropEvent = self.dropEvent
-        # self.data_plot.dragEnterEvent = self.dragEnterEvent
-        #
-        # if self._initial_topics:
-        #     for topic_name in self._initial_topics:
-        #         self.add_topic(topic_name)
-        #     self._initial_topics = None
-        # else:
-        #     for topic_name, rosdata in self._rosdata.items():
-        #         data_x, data_y = rosdata.next()
-        #         self.data_plot.add_curve(topic_name, topic_name, data_x, data_y)
-        #
-        # self._subscribed_topics_changed()
+        self.plotLayout.addWidget(self.data_plot)
 
-    #
-    # @Slot('QDragEnterEvent*')
-    # def dragEnterEvent(self, event):
-    #     # get topic name
-    #     if not event.mimeData().hasText():
-    #         if not hasattr(event.source(), 'selectedItems') or \
-    #                 len(event.source().selectedItems()) == 0:
-    #             qWarning(
-    #                 'Plot.dragEnterEvent(): not hasattr(event.source(), selectedItems) or '
-    #                 'len(event.source().selectedItems()) == 0')
-    #             return
-    #         item = event.source().selectedItems()[0]
-    #         topic_name = item.data(0, Qt.UserRole)
-    #         if topic_name == None:
-    #             qWarning('Plot.dragEnterEvent(): not hasattr(item, ros_topic_name_)')
-    #             return
-    #     else:
-    #         topic_name = str(event.mimeData().text())
-    #
-    #     # check for plottable field type
-    #     plottable, message = is_plottable(topic_name)
-    #     if plottable:
-    #         event.acceptProposedAction()
-    #     else:
-    #         qWarning('Plot.dragEnterEvent(): rejecting: "%s"' % (message))
-    #
-    # @Slot('QDropEvent*')
-    # def dropEvent(self, event):
-    #     if event.mimeData().hasText():
-    #         topic_name = str(event.mimeData().text())
-    #     else:
-    #         droped_item = event.source().selectedItems()[0]
-    #         topic_name = str(droped_item.data(0, Qt.UserRole))
-    #     self.add_topic(topic_name)
-    #
-    #
+    @pyqtSlot(bool)
+    def on_btn_open_clicked(self, checked):
+        if checked:
+            port = self.edit_port.text()
+            baud = self.edit_baudrate.text()
+            if not self._comdata.open(port, baud):
+                self.btn_open.setChecked(False)
+            else:
+                self.btn_open.setText("Close")
+        else:
+            self._comdata.close()
+            self.btn_open.setText("Open")
+
+    @pyqtSlot()
+    def on_btn_save_clicked(self):
+        timer_status = self._update_plot_timer.isActive()
+        if timer_status:
+            self.enable_timer(False, wait=True)
+        buff_y = None
+
+        x_limit = [np.inf, -np.inf]
+        for curve_id, data_idx in self._plotdata.items():
+            curve = self.data_plot._get_curve(curve_id)
+            if len(curve['x']) > 0:
+                x_limit[0] = min(x_limit[0], curve['x'].min())
+                x_limit[1] = max(x_limit[1], curve['x'].max())
+
+        for curve_id, data_idx in self._plotdata.items():
+            curve = self.data_plot._get_curve(curve_id)
+            start_index = curve['x'].searchsorted(x_limit[0])
+            end_index = curve['x'].searchsorted(x_limit[1])
+            region = curve['y'][start_index:end_index]
+
+            if buff_y is None:
+                buff_y = [region.copy()]
+            else:
+                buff_y = np.concatenate((buff_y, [region.copy()]), axis=0)
+        if timer_status:
+            self.enable_timer(True)
+
+        if buff_y is not None and buff_y.size != 0:
+            dir = "save_data"
+            os.makedirs(dir, exist_ok=True)
+            name = f'{datetime.now().strftime("%m%d%Y_%H%M%S")}.csv'
+            file_path = os.path.abspath(os.path.join(dir, name))
+            np.savetxt(file_path, buff_y.T, fmt="%d", delimiter=',')
+            self.label_status.setText(f"save {buff_y.shape[-1]} data to: {file_path}")
+
     @pyqtSlot(bool)
     def on_pause_button_clicked(self, checked):
         self.enable_timer(not checked)
@@ -166,9 +191,67 @@ class PlotWidget(QWidget):
         if checked:
             self.data_plot.redraw()
 
+    @pyqtSlot(bool)
+    def on_autoscroll_checkbox_clicked(self, checked):
+        self.data_plot.autoscroll(checked)
+        if checked:
+            self.data_plot.redraw()
+
+    @pyqtSlot(int)
+    def on_yMinSpinBox_valueChanged(self, value):
+        if not self.cbox_autoscale_y.isChecked():
+            self.manual_scale_y()
+
+    @pyqtSlot(int)
+    def on_yMaxSpinBox_valueChanged(self, value):
+        if not self.cbox_autoscale_y.isChecked():
+            self.manual_scale_y()
+
+    def manual_scale_y(self):
+        y_min = self.yMinSpinBox.value()
+        y_max = self.yMaxSpinBox.value()
+        self.data_plot.set_ylim([y_min, y_max])
+        self.data_plot.redraw()
+
+    @pyqtSlot(bool)
+    def on_cbox_autoscale_y_clicked(self, checked):
+        if checked:
+            self.data_plot.set_autoscale(y=DataPlot.SCALE_EXTEND | DataPlot.SCALE_VISIBLE)
+            self.data_plot.redraw()
+        else:
+            self.data_plot.set_autoscale(y=0)
+            self.manual_scale_y()
+
     @pyqtSlot()
     def on_clear_button_clicked(self):
         self.clear_plot()
+
+    @pyqtSlot()
+    def on_btn_setting_clicked(self):
+        self.data_plot.doSettingsDialog()
+
+    @pyqtSlot(QListWidgetItem)
+    def on_listWidgetChannels_itemDoubleClicked(self, item):
+        curve_id = item.text()
+
+        if self.data_plot.visible(curve_id):
+            self.data_plot.set_visible(curve_id, False)
+            item.setBackground(Qt.color1)
+        else:
+            self.data_plot.set_visible(curve_id, True)
+            item.setBackground(Qt.color0)
+
+    @pyqtSlot()
+    def on_btn_showall_clicked(self):
+        for curve_id, data_idx in self._plotdata.items():
+            self.data_plot.set_visible(curve_id, True)
+            self.listWidgetChannels.item(data_idx).setBackground(Qt.color0)
+
+    @pyqtSlot()
+    def on_btn_hideall_clicked(self):
+        for curve_id, data_idx in self._plotdata.items():
+            self.data_plot.set_visible(curve_id, False)
+            self.listWidgetChannels.item(data_idx).setBackground(Qt.color1)
 
     def update_plot(self):
         if self.data_plot is not None:
@@ -184,46 +267,19 @@ class PlotWidget(QWidget):
             if needs_redraw:
                 self.data_plot.redraw()
 
-    # def add_topic(self, topic_name):
-    #     topics_changed = False
-    #     for topic_name in get_plot_fields(topic_name)[0]:
-    #         if topic_name in self._rosdata:
-    #             qWarning('PlotWidget.add_topic(): topic already subscribed: %s' % topic_name)
-    #             continue
-    #         self._rosdata[topic_name] = ROSData(topic_name, self._start_time)
-    #         if self._rosdata[topic_name].error is not None:
-    #             qWarning(str(self._rosdata[topic_name].error))
-    #             del self._rosdata[topic_name]
-    #         else:
-    #             data_x, data_y = self._rosdata[topic_name].next()
-    #             self.data_plot.add_curve(topic_name, topic_name, data_x, data_y)
-    #             topics_changed = True
-    #
-    #     if topics_changed:
-    #         self._subscribed_topics_changed()
-    #
-    # def remove_topic(self, topic_name):
-    #     self._rosdata[topic_name].close()
-    #     del self._rosdata[topic_name]
-    #     self.data_plot.remove_curve(topic_name)
-    #
-    #     self._subscribed_topics_changed()
-    #
     def clear_plot(self):
+        self.enable_timer(False, wait=True)
+        self._comdata.reset_idx()
         for topic_name, _ in self._plotdata.items():
             self.data_plot.clear_values(topic_name)
         self.data_plot.redraw()
+        self.enable_timer(self._plotdata)
 
-    # def clean_up_subscribers(self):
-    #     for topic_name, rosdata in self._rosdata.items():
-    #         rosdata.close()
-    #         self.data_plot.remove_curve(topic_name)
-    #     self._rosdata = {}
-    #
-    #     self._subscribed_topics_changed()
-
-    def enable_timer(self, enabled=True):
+    def enable_timer(self, enabled=True, wait=False):
         if enabled:
             self._update_plot_timer.start(self._redraw_interval)
         else:
             self._update_plot_timer.stop()
+            if wait:
+                while self._update_plot_timer.isActive():
+                    time.sleep(0.01)
