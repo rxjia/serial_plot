@@ -47,6 +47,7 @@ from PyQt5.QtCore import QTimer, pyqtSlot, Qt
 from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import QWidget, QMenu, QListWidgetItem
 from PyQt5.uic import loadUi
+from scipy import signal
 
 from com_data import ComData
 from data_plot import DataPlot
@@ -79,7 +80,9 @@ class PlotWidget(QWidget):
 
         self._start_time = time.time()
         self._plotdata = {}
+        self.filter_name = {}
         self._comdata = ComData(0)
+        self.channels = 8
 
         self._remove_topic_menu = QMenu()
 
@@ -88,8 +91,16 @@ class PlotWidget(QWidget):
 
         for i in range(8):
             self._plotdata[f"CH{i}"] = i
+            self.filter_name[i] = f"CH{i}_filter"
 
         self.csvFile = None
+
+        b, a = signal.butter(40, 2 * 40 / 200, 'lowpass')
+        self.filter_b = b
+        self.filter_a = a
+        self.filter_zi = signal.lfilter_zi(self.filter_b, self.filter_a)
+        self.filter_zi = np.tile(self.filter_zi, (8, 1)).transpose()
+        self.filter_zf = self.filter_zi
 
         # init and start update timer for plot
         self._update_plot_timer = QTimer(self)
@@ -127,6 +138,14 @@ class PlotWidget(QWidget):
 
             self.listWidgetChannels.addItem(topic_name)
             self.listWidgetChannels.item(data_idx).setForeground(QBrush(self.data_plot._curves[topic_name]['color']))
+
+        for _, data_idx in self._plotdata.items():
+            topic_name = self.filter_name[data_idx]
+            self.data_plot.add_curve(topic_name, topic_name, data_x, data_y)
+
+            self.listWidgetChannels.addItem(topic_name)
+            self.listWidgetChannels.item(self.channels + data_idx).setForeground(
+                QBrush(self.data_plot._curves[topic_name]['color']))
 
         self.enable_timer(self._plotdata)
         self.data_plot.redraw()
@@ -258,10 +277,17 @@ class PlotWidget(QWidget):
             needs_redraw = False
 
             data_x, data_y_all = self._comdata.next()
+            if len(data_y_all.shape) == 1:
+                data_y_all = data_y_all.reshape(-1, 8)
             if data_x.shape[0] != 0:
+                data_filtered, self.filter_zf = signal.lfilter(self.filter_b, self.filter_a, data_y_all, axis=0,
+                                                               zi=self.filter_zf)
+
                 for topic_name, data_idx in self._plotdata.items():
                     data_y = data_y_all[:, data_idx]
                     self.data_plot.update_values(topic_name, data_x, data_y)
+
+                    self.data_plot.update_values(self.filter_name[data_idx], data_x, data_filtered[:, data_idx])
                 needs_redraw = True
 
             if needs_redraw:
@@ -270,8 +296,9 @@ class PlotWidget(QWidget):
     def clear_plot(self):
         self.enable_timer(False, wait=True)
         self._comdata.reset_idx()
-        for topic_name, _ in self._plotdata.items():
+        for topic_name, idx in self._plotdata.items():
             self.data_plot.clear_values(topic_name)
+            self.data_plot.clear_values(self.filter_name[idx])
         self.data_plot.redraw()
         self.enable_timer(self._plotdata)
 

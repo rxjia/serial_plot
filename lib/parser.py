@@ -11,10 +11,10 @@ import logging
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.WARNING)
 """
-    数据头：   AA 44
+    数据头：   7F FE
     数据长度： 05
     数据正文： 01 02 03 04 05
-    校验：    EA
+    校验：    93 04
 """
 
 data_header = [0x7f, 0xfe]

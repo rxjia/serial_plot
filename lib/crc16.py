@@ -39,5 +39,6 @@ def crc16(buf, count):
 if __name__ == '__main__':
     buf = '123456789'
     buf = bytes(buf, encoding="utf8")
-    crc = crc16(buf, 9)
+    buf = bytes([0x01, 0x02, 0x03, 0x04, 0x05])
+    crc = crc16(buf, len(buf))
     print(f"{crc:X}")
