@@ -95,7 +95,8 @@ class PlotWidget(QWidget):
 
         self.csvFile = None
 
-        b, a = signal.butter(40, 2 * 40 / 200, 'lowpass')
+        self.fs = 200  # sampling frequency
+        b, a = signal.butter(40, 2 * 40 / self.fs, 'lowpass')  # 40 order, 40 Hz , lowpass
         self.filter_b = b
         self.filter_a = a
         self.filter_zi = signal.lfilter_zi(self.filter_b, self.filter_a)
