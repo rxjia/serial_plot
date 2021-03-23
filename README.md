@@ -20,7 +20,7 @@ HEX
 
 ## Arduino crc16 code
 
-[arduino/crc16](./lib/arduino/crc16)
+[arduino/crc16](arduino/crc16)
 
 ## Arduino example
 
